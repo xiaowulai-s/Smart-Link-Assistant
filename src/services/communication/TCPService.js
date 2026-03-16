@@ -6,6 +6,8 @@
 class TCPService {
   constructor() {
     this.connections = new Map()
+    this.listeners = new Map()
+    this.isElectron = typeof window !== 'undefined' && window.electronAPI
   }
 
   /**
@@ -13,34 +15,61 @@ class TCPService {
    * @param {Object} config - 连接配置
    * @param {string} config.ip - IP地址
    * @param {number} config.port - 端口号
-   * @param {number} config.timeout - 超时时间(毫秒)
+   * @param {string} config.deviceId - 设备ID
    * @returns {Promise<Object>} 连接结果
    */
   async connect(config) {
     try {
-      // 这里需要调用Electron的IPC或Node.js的net模块
-      // 实际实现需要结合Electron主进程
+      if (this.isElectron) {
+        // 使用 Electron IPC
+        const result = await window.electronAPI.tcp.connect(config)
 
-      console.log('TCP连接:', config)
+        if (result.success) {
+          const connection = {
+            id: result.connectionId,
+            type: 'TCP',
+            ip: config.ip,
+            port: config.port,
+            deviceId: config.deviceId,
+            status: 'connected',
+            connectedAt: result.deviceId ? new Date().toISOString() : undefined
+          }
+          this.connections.set(result.connectionId, connection)
 
-      // 模拟连接
-      await new Promise(resolve => setTimeout(resolve, 1000))
+          return {
+            success: true,
+            connection,
+            message: result.message
+          }
+        } else {
+          return {
+            success: false,
+            error: result.error,
+            message: 'TCP连接失败'
+          }
+        }
+      } else {
+        // 开发模式 - 模拟连接
+        console.log('TCP连接 (模拟):', config)
+        await new Promise(resolve => setTimeout(resolve, 1000))
 
-      const connection = {
-        id: `${config.ip}:${config.port}`,
-        type: 'TCP',
-        ip: config.ip,
-        port: config.port,
-        status: 'connected',
-        connectedAt: new Date().toISOString()
-      }
+        const connectionId = `${config.ip}:${config.port}`
+        const connection = {
+          id: connectionId,
+          type: 'TCP',
+          ip: config.ip,
+          port: config.port,
+          deviceId: config.deviceId,
+          status: 'connected',
+          connectedAt: new Date().toISOString()
+        }
+        this.connections.set(connectionId, connection)
 
-      this.connections.set(connection.id, connection)
-
-      return {
-        success: true,
-        connection,
-        message: 'TCP连接成功'
+        return {
+          success: true,
+          connection,
+          message: 'TCP连接成功（模拟模式）'
+        }
       }
     } catch (error) {
       return {
@@ -58,19 +87,18 @@ class TCPService {
    */
   async disconnect(connectionId) {
     try {
-      const connection = this.connections.get(connectionId)
-      if (!connection) {
-        throw new Error('连接不存在')
-      }
-
-      // 调用实际的断开连接逻辑
-      console.log('TCP断开连接:', connectionId)
-
-      this.connections.delete(connectionId)
-
-      return {
-        success: true,
-        message: 'TCP连接已断开'
+      if (this.isElectron) {
+        const result = await window.electronAPI.tcp.disconnect(connectionId)
+        this.connections.delete(connectionId)
+        return result
+      } else {
+        // 开发模式 - 模拟断开
+        console.log('TCP断开连接 (模拟):', connectionId)
+        this.connections.delete(connectionId)
+        return {
+          success: true,
+          message: 'TCP连接已断开（模拟模式）'
+        }
       }
     } catch (error) {
       return {
@@ -89,23 +117,21 @@ class TCPService {
    */
   async sendCommand(connectionId, command) {
     try {
-      const connection = this.connections.get(connectionId)
-      if (!connection) {
-        throw new Error('连接不存在')
-      }
+      if (this.isElectron) {
+        const result = await window.electronAPI.tcp.send(connectionId, command)
+        return result
+      } else {
+        // 开发模式 - 模拟发送
+        console.log('TCP发送命令 (模拟):', connectionId, command)
+        await new Promise(resolve => setTimeout(resolve, 500))
 
-      // 调用实际发送逻辑
-      console.log('TCP发送命令:', connectionId, command)
-
-      // 模拟发送和接收响应
-      await new Promise(resolve => setTimeout(resolve, 500))
-
-      return {
-        success: true,
-        sentAt: new Date().toISOString(),
-        command,
-        response: 'ACK',
-        message: '命令发送成功'
+        return {
+          success: true,
+          sentAt: new Date().toISOString(),
+          command,
+          response: 'ACK',
+          message: '命令发送成功（模拟模式）'
+        }
       }
     } catch (error) {
       return {
@@ -122,10 +148,42 @@ class TCPService {
    * @param {Function} callback - 数据回调函数
    */
   onData(connectionId, callback) {
-    const connection = this.connections.get(connectionId)
-    if (connection) {
-      // 设置数据接收监听
-      console.log('TCP数据监听已设置:', connectionId)
+    if (this.isElectron) {
+      // 设置监听器
+      const listener = (event, data) => {
+        if (data.connectionId === connectionId) {
+          callback(data)
+        }
+      }
+      window.electronAPI.tcp.onData(listener)
+      this.listeners.set(`data:${connectionId}`, listener)
+
+      // 同时监听错误和关闭事件
+      window.electronAPI.tcp.onError((event, data) => {
+        if (data.connectionId === connectionId) {
+          callback({ ...data, type: 'error' })
+        }
+      })
+      window.electronAPI.tcp.onClose((event, data) => {
+        if (data.connectionId === connectionId) {
+          callback({ ...data, type: 'close' })
+        }
+      })
+    } else {
+      // 开发模式 - 模拟数据接收
+      console.log('TCP数据监听 (模拟):', connectionId)
+    }
+  }
+
+  /**
+   * 移除数据监听器
+   * @param {string} connectionId - 连接ID
+   */
+  offData(connectionId) {
+    if (this.isElectron && this.listeners.has(`data:${connectionId}`)) {
+      const listener = this.listeners.get(`data:${connectionId}`)
+      window.electronAPI.tcp.removeListener('tcp:data', listener)
+      this.listeners.delete(`data:${connectionId}`)
     }
   }
 
@@ -134,7 +192,10 @@ class TCPService {
    * @param {string} connectionId - 连接ID
    * @returns {boolean} 连接状态
    */
-  isConnected(connectionId) {
+  async isConnected(connectionId) {
+    if (this.isElectron) {
+      return await window.electronAPI.tcp.isConnected(connectionId)
+    }
     const connection = this.connections.get(connectionId)
     return connection && connection.status === 'connected'
   }
@@ -143,7 +204,10 @@ class TCPService {
    * 获取所有连接
    * @returns {Array} 连接列表
    */
-  getConnections() {
+  async getConnections() {
+    if (this.isElectron) {
+      return await window.electronAPI.tcp.getConnections()
+    }
     return Array.from(this.connections.values())
   }
 
@@ -160,3 +224,4 @@ class TCPService {
 
 // 导出单例
 export default new TCPService()
+

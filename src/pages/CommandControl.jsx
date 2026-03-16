@@ -1,6 +1,7 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import useStore from '../store/useStore'
-import { PaperAirplaneIcon, ClockIcon } from '@heroicons/react/24/outline'
+import CommunicationService from '../services/communication'
+import { PaperAirplaneIcon, ClockIcon, ExclamationCircleIcon, CheckCircleIcon } from '@heroicons/react/24/outline'
 
 const CommandControl = () => {
   const { devices, commandHistory, addCommandHistory, addDevice } = useStore()
@@ -9,20 +10,31 @@ const CommandControl = () => {
   const [customCommand, setCustomCommand] = useState('')
   const [selectedCommand, setSelectedCommand] = useState('')
   const [sending, setSending] = useState(false)
+  const [lastResult, setLastResult] = useState(null)
+  const [showResult, setShowResult] = useState(false)
 
   const connectedDevices = devices.filter(d => d.status === 'connected')
 
-  // 预定义命令模板
-  const commandTemplates = [
-    { id: 'read_data', name: '读取数据', command: 'READ_DATA' },
-    { id: 'start_measure', name: '开始测量', command: 'START_MEASURE' },
-    { id: 'stop_measure', name: '停止测量', command: 'STOP_MEASURE' },
-    { id: 'calibrate', name: '校准', command: 'CALIBRATE' },
-    { id: 'reset', name: '复位', command: 'RESET' },
-    { id: 'get_status', name: '获取状态', command: 'GET_STATUS' },
-    { id: 'set_zero', name: '归零', command: 'SET_ZERO' },
-    { id: 'get_config', name: '获取配置', command: 'GET_CONFIG' },
-  ]
+  // 获取可用的命令列表
+  const availableCommands = CommunicationService.getAvailableCommands()
+
+  // 预定义命令模板（如果没有可用的协议命令，使用默认模板）
+  const commandTemplates = availableCommands.length > 0
+    ? availableCommands.map(cmd => ({
+        id: cmd,
+        name: cmd,
+        command: cmd
+      }))
+    : [
+        { id: 'read_data', name: '读取数据', command: 'READ_DATA' },
+        { id: 'start_measure', name: '开始测量', command: 'START_MEASURE' },
+        { id: 'stop_measure', name: '停止测量', command: 'STOP_MEASURE' },
+        { id: 'calibrate', name: '校准', command: 'CALIBRATE' },
+        { id: 'reset', name: '复位', command: 'RESET' },
+        { id: 'get_status', name: '获取状态', command: 'GET_STATUS' },
+        { id: 'set_zero', name: '归零', command: 'SET_ZERO' },
+        { id: 'get_config', name: '获取配置', command: 'GET_CONFIG' },
+      ]
 
   const selectedDevice = selectedDeviceId
     ? connectedDevices.find(d => d.id === selectedDeviceId)
@@ -35,28 +47,53 @@ const CommandControl = () => {
     if (!command) return
 
     setSending(true)
+    setShowResult(false)
     try {
-      // 这里将调用实际的通信模块发送命令
-      await new Promise(resolve => setTimeout(resolve, 1000)) // 模拟发送延迟
+      const result = await CommunicationService.sendCommand(selectedDevice, command)
 
-      // 记录命令历史
-      addCommandHistory({
-        deviceId: selectedDevice.id,
-        deviceName: selectedDevice.name,
-        command: command,
-        type: commandType,
-      })
+      // 设置结果
+      setLastResult(result)
+      setShowResult(true)
 
-      // 清空自定义命令
-      if (commandType === 'custom') {
-        setCustomCommand('')
+      if (result.success) {
+        // 记录命令历史
+        addCommandHistory({
+          deviceId: selectedDevice.id,
+          deviceName: selectedDevice.name,
+          command: command,
+          type: commandType,
+        })
+
+        // 清空自定义命令
+        if (commandType === 'custom') {
+          setCustomCommand('')
+        }
+      } else {
+        console.error('发送命令失败:', result.error)
+        alert(`发送命令失败: ${result.error || result.message}`)
       }
     } catch (error) {
       console.error('发送命令失败:', error)
+      setLastResult({
+        success: false,
+        error: error.message,
+        message: '发送命令失败'
+      })
+      setShowResult(true)
     } finally {
       setSending(false)
     }
   }
+
+  // 3秒后自动隐藏结果提示
+  useEffect(() => {
+    if (showResult) {
+      const timer = setTimeout(() => {
+        setShowResult(false)
+      }, 3000)
+      return () => clearTimeout(timer)
+    }
+  }, [showResult])
 
   return (
     <div className="space-y-6">
@@ -64,6 +101,22 @@ const CommandControl = () => {
         <h2 className="text-2xl font-bold text-windows-text">指令控制</h2>
         <p className="text-windows-textSecondary mt-1">向设备发送控制指令</p>
       </div>
+
+      {/* 结果提示 */}
+      {showResult && lastResult && (
+        <div className={`flex items-center gap-3 px-4 py-3 rounded-lg ${
+          lastResult.success ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
+        }`}>
+          {lastResult.success ? (
+            <CheckCircleIcon className="w-5 h-5 flex-shrink-0" />
+          ) : (
+            <ExclamationCircleIcon className="w-5 h-5 flex-shrink-0" />
+          )}
+          <span className="font-medium">
+            {lastResult.success ? '命令发送成功' : (lastResult.error || lastResult.message)}
+          </span>
+        </div>
+      )}
 
       {connectedDevices.length === 0 ? (
         <div className="bg-white rounded-xl shadow-windows p-12 text-center">

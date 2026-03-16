@@ -1,34 +1,73 @@
 import { create } from 'zustand'
+import LocalStorageService from '../services/storage/LocalStorageService'
+
+// 从本地存储加载初始数据
+const initialDevices = LocalStorageService.loadDevices()
+const initialCommandHistory = LocalStorageService.loadCommandHistory()
+const initialConnections = LocalStorageService.loadConnections()
+const initialErrors = LocalStorageService.loadErrors()
 
 const useStore = create((set, get) => ({
   // 设备列表
-  devices: [],
-  setDevices: (devices) => set({ devices }),
+  devices: initialDevices,
+  setDevices: (devices) => {
+    set({ devices })
+    LocalStorageService.saveDevices(devices)
+  },
 
   // 当前选中的设备
   selectedDevice: null,
   setSelectedDevice: (device) => set({ selectedDevice: device }),
 
   // 连接状态
-  connections: {},
-  setConnections: (connections) => set({ connections }),
+  connections: initialConnections,
+  setConnections: (connections) => {
+    set({ connections })
+    LocalStorageService.saveConnections(connections)
+  },
+
+  // 错误状态
+  errors: initialErrors,
+  addError: (error) => set((state) => {
+    const newErrors = [
+      { ...error, id: Date.now(), timestamp: new Date().toISOString() },
+      ...state.errors
+    ].slice(0, 50)
+    LocalStorageService.saveErrors(newErrors)
+    return { errors: newErrors }
+  }),
+  removeError: (errorId) => set((state) => {
+    const newErrors = state.errors.filter(e => e.id !== errorId)
+    LocalStorageService.saveErrors(newErrors)
+    return { errors: newErrors }
+  }),
+  clearErrors: () => {
+    LocalStorageService.saveErrors([])
+    set({ errors: [] })
+  },
 
   // 添加设备
-  addDevice: (device) => set((state) => ({
-    devices: [...state.devices, { ...device, id: Date.now() }]
-  })),
+  addDevice: (device) => set((state) => {
+    const newDevices = [...state.devices, { ...device, id: Date.now() }]
+    LocalStorageService.saveDevices(newDevices)
+    return { devices: newDevices }
+  }),
 
   // 删除设备
-  removeDevice: (deviceId) => set((state) => ({
-    devices: state.devices.filter(d => d.id !== deviceId)
-  })),
+  removeDevice: (deviceId) => set((state) => {
+    const newDevices = state.devices.filter(d => d.id !== deviceId)
+    LocalStorageService.saveDevices(newDevices)
+    return { devices: newDevices }
+  }),
 
   // 更新设备
-  updateDevice: (deviceId, updates) => set((state) => ({
-    devices: state.devices.map(d =>
+  updateDevice: (deviceId, updates) => set((state) => {
+    const newDevices = state.devices.map(d =>
       d.id === deviceId ? { ...d, ...updates } : d
     )
-  })),
+    LocalStorageService.saveDevices(newDevices)
+    return { devices: newDevices }
+  }),
 
   // 实时数据
   realtimeData: {},
@@ -44,16 +83,21 @@ const useStore = create((set, get) => ({
   setHistoryData: (data) => set({ historyData: data }),
 
   // 命令历史
-  commandHistory: [],
-  setCommandHistory: (history) => set({ commandHistory: history }),
+  commandHistory: initialCommandHistory,
+  setCommandHistory: (history) => {
+    set({ commandHistory: history })
+    LocalStorageService.saveCommandHistory(history)
+  },
 
   // 添加命令历史
-  addCommandHistory: (command) => set((state) => ({
-    commandHistory: [
+  addCommandHistory: (command) => set((state) => {
+    const newHistory = [
       { ...command, timestamp: new Date().toISOString() },
       ...state.commandHistory
-    ].slice(0, 100) // 保留最近100条
-  })),
+    ].slice(0, 100)
+    LocalStorageService.saveCommandHistory(newHistory)
+    return { commandHistory: newHistory }
+  }),
 }))
 
 export default useStore
