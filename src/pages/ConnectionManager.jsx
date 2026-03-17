@@ -6,7 +6,7 @@ import { useToast, Alert } from '../components/common/Toast'
 
 const ConnectionManager = () => {
   const { devices, updateDevice, errors, addError, removeError } = useStore()
-  const { success, error } = useToast()
+  const { success: showSuccess, error: showError } = useToast()
   const [connectingId, setConnectingId] = useState(null)
   const [serialPorts, setSerialPorts] = useState([])
   const [loadingPorts, setLoadingPorts] = useState(false)
@@ -41,7 +41,7 @@ const ConnectionManager = () => {
 
       if (result.success) {
         updateDevice(device.id, { status: 'connected' })
-        success(`设备 ${device.name} 连接成功`)
+        showSuccess(`设备 ${device.name} 连接成功`)
       } else {
         const errorMsg = result.error || result.message || '连接失败'
         addError({
@@ -50,7 +50,7 @@ const ConnectionManager = () => {
           type: 'connection',
           message: errorMsg,
         })
-        error(`设备 ${device.name} 连接失败: ${errorMsg}`)
+        showError(`设备 ${device.name} 连接失败: ${errorMsg}`)
       }
     } catch (err) {
       console.error('连接失败:', err)
@@ -61,7 +61,7 @@ const ConnectionManager = () => {
         type: 'connection',
         message: errorMsg,
       })
-      error(`设备 ${device.name} 连接失败: ${errorMsg}`)
+      showError(`设备 ${device.name} 连接失败: ${errorMsg}`)
     } finally {
       setConnectingId(null)
     }
@@ -74,7 +74,7 @@ const ConnectionManager = () => {
 
       if (result.success) {
         updateDevice(device.id, { status: 'disconnected' })
-        success(`设备 ${device.name} 已断开连接`)
+        showSuccess(`设备 ${device.name} 已断开连接`)
       } else {
         const errorMsg = result.error || result.message || '断开连接失败'
         addError({
@@ -83,7 +83,7 @@ const ConnectionManager = () => {
           type: 'disconnection',
           message: errorMsg,
         })
-        error(`设备 ${device.name} 断开连接失败: ${errorMsg}`)
+        showError(`设备 ${device.name} 断开连接失败: ${errorMsg}`)
       }
     } catch (err) {
       console.error('断开连接失败:', err)
@@ -94,7 +94,7 @@ const ConnectionManager = () => {
         type: 'disconnection',
         message: errorMsg,
       })
-      error(`设备 ${device.name} 断开连接失败: ${errorMsg}`)
+      showError(`设备 ${device.name} 断开连接失败: ${errorMsg}`)
     } finally {
       setConnectingId(null)
     }
