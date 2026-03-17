@@ -4,6 +4,9 @@ const { SerialPort } = require('serialport')
 const { ReadlineParser } = require('@serialport/parser-readline')
 const net = require('net')
 
+// 设置中文语言
+app.commandLine.appendSwitch('lang', 'zh-CN')
+
 // 串口连接管理器
 class SerialPortManager {
   constructor() {
@@ -431,7 +434,8 @@ function createWindow() {
       contextIsolation: true,
       preload: path.join(__dirname, 'preload.js')
     },
-    icon: path.join(__dirname, '../assets/icon.png')
+    icon: path.join(__dirname, '../assets/icon.png'),
+    backgroundColor: '#f3f3f3'
   })
 
   // 开发环境加载本地服务器，生产环境加载打包后的文件
@@ -447,7 +451,15 @@ function createWindow() {
   })
 }
 
+// 在应用启动时设置语言
+app.on('ready', () => {
+  app.setAppUserModelId('com.smartlink.assistant')
+})
+
 app.whenReady().then(() => {
+  // 设置应用语言
+  app.setLocale('zh-CN')
+
   createWindow()
 
   app.on('activate', () => {
@@ -455,6 +467,11 @@ app.whenReady().then(() => {
       createWindow()
     }
   })
+})
+
+// 在应用启动时设置语言
+app.on('ready', () => {
+  app.setAppUserModelId('com.smartlink.assistant')
 })
 
 app.on('window-all-closed', () => {
